@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SScheduler ICS client</title>
+    <script src="ics.min.js"></script>
+    <style>
+	#d{
+	    color: blue;
+	    text-decoration: underline;
+	    cursor: pointer;
+	}
+    </style>
+</head>
+<body>
+    Downloading...<br/>
+    Not Downloading? Click <span id="d">here</span>
+    <script>
+        const findGetParameter = (parameterName) => {
+            var result = null,
+                tmp = [];
+            var items = location.search.substr(1).split("&");
+            for (var index = 0; index < items.length; index++) {
+                tmp = items[index].split("=");
+                if (tmp[0] === parameterName) result = decodeURIComponent(tmp[1]);
+            }
+            return result;
+        }
+	const download = () => {
+	    let bdata = findGetParameter("id")||null;
+            let data = JSON.parse(atob(bdata));
+            data.startTime = new Date(data.startTime).toISOString().slice(0, -1)+data.timezone;
+            data.endTime = new Date(data.endTime).toISOString().slice(0, -1)+data.timezone;
+            console.log(data);
+            var cal = ics();
+            cal.addEvent(data.subject, data.description, data.location, data.startTime, data.endTime);
+            cal.download(data.subject);            
+
+	}
+        window.onload = download()
+	document.getElementById("d").addEventListener("click", download, false);
+    </script>
+</body>
+</html>

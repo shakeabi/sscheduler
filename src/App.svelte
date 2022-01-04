@@ -1,32 +1,169 @@
 <script>
-	export let name;
+	import {generateId} from './utils/crypto';
+	import {getNewJitsiMeet} from './utils/jitsi';
+	import {getIcsDownloadLink} from './utils/icsHelper';
+	import {toIsoString, addMinutesToDate} from './utils/datetime';
+	import Timezones from './Timezones.svelte';
+
+	let bools = {
+		allowSubject: false,
+		openVerify: false,
+		meetGenerated: false
+	}
+	let data = {
+		subject: "New Event",
+		description: "Event generated through sscheduler",
+		dateInp: toIsoString(new Date()),
+		duration: 25,
+		timezone: new Date().toString().match(/([-\+][0-9]+)\s/)[1]
+	};
+
+	let meetData;
+
+	const generateDataString = async ({type='attendee', verify=false}={}) => {
+		if(!bools.meetGenerated){
+			const randStr = generateId(64);
+			meetData = await getNewJitsiMeet(randStr);
+			bools.meetGenerated = true;
+		}
+
+		let link = ""
+		if(type=='attendee') link = meetData.customerURL;
+		else link = meetData.moderatorURL;
+//		if(verify){
+//			link = "<MEET LINK>";
+//		}
+
+		let formattedData = {
+			...data,
+			startTime: new Date(data.dateInp).toGMTString(),
+			endTime: addMinutesToDate(data.dateInp, data.duration).toGMTString(),
+			location: link
+		}
+
+		let icsLink = getIcsDownloadLink(formattedData);
+
+		let out = `
+Meet Invite:
+------------
+Event Name: ${formattedData.subject}
+Event Desc: ${formattedData.description}
+Start Time: ${formattedData.startTime}
+End Time: ${formattedData.endTime}
+Duration: ${formattedData.duration} mins
+Location: ${formattedData.location}
+
+Click here to download .ics file: ${icsLink}
+`;
+		return out;
+	}
+
+	const validateData = () => {
+		let errStr = "";
+		if (data.duration<1){
+			errStr = "Duration must be greater than 0!"
+		}
+
+		if(errStr=="")return true;
+		else alert(errStr);
+	}
+
+	const shareHandler = async (type) => {
+
+		if(validateData()){
+			const shareData = {
+				title: data.subject,
+				text: await generateDataString({type})
+			}
+			await navigator.share(shareData)
+		}
+	}
+
 </script>
 
 <main>
-	<h1>Hello {name}!</h1>
-	<p>This is a starter template for a Svelte PWA, based in the <a href="https://github.com/sveltejs/template" target="_blank">Svelte template</a></p>
-	<p>You will find the manifest.json file and the service-worker.js file in the public folder</p>
-	<p>To update the proper icons for the PWA check <i>/public/images/icons</i></p>
+	<!-- <pre>{JSON.stringify(data, null, 2)}</pre> -->
+	<h1>SScheduler &#x1F4C5;</h1>
+	<p>When?</p>
+	<input id="whenInp" bind:value={data.dateInp} type="datetime-local" min={toIsoString(new Date())}/>
+	<p>Duration? (mins)</p>
+	<input id="durationInp" bind:value={data.duration} type="number" min=1 step=5 on:change={v => {if(v<1)data.duration=1}}/>
+	<p>Timezone?</p>
+	<Timezones bind:timezone={data.timezone}/>
+	{#if bools.allowSubject==false}
+		<button on:click={()=>{bools.allowSubject=true}}>Add Subject and Desc.</button>
+	{:else}
+		<p>Subject?</p>
+		<input id="subjectInp" bind:value={data.subject} type="text"/>
+		<p>Description?</p>
+		<input id="descInp" bind:value={data.description} type="text"/>
+	{/if}
+	{#if bools.meetGenerated}
+	<p>Meet Details</p>
+		<div>
+			Moderator Link: <a href="{meetData.moderatorURL}">Link</a><br/>
+			Attendee Link: <a href="{meetData.customerURL}">Link</a>
+		</div>
+	{/if}
+	<button on:click={()=>{bools.openVerify=true}}>Verify & Share</button>
+	{#if bools.openVerify}
+		{#await generateDataString({verify:true}) then val}
+			<div id="verify">
+				<span id="verify-close" on:click={()=>{bools.openVerify=false}}>&#10006;</span>
+				<pre>{val}</pre>
+				<button id="share-a" on:click={()=>shareHandler('attendee')}>Share - attendees</button>
+				<button id="share-m" on:click={()=>shareHandler('mod')}>Share - mods</button>
+			</div>
+		{/await}
+	{/if}
 </main>
 
 <style>
 	main {
-		text-align: center;
 		padding: 1em;
-		max-width: 240px;
+		max-width: 500px;
 		margin: 0 auto;
 	}
 
-	h1 {
-		color: #ff3e00;
-		text-transform: uppercase;
-		font-size: 4em;
-		font-weight: 100;
+	h1{
+		font-size: 3em;
 	}
 
-	@media (min-width: 640px) {
-		main {
+	p {
+		font-weight: 900;
+		font-size: 25px;
+		margin: 0;
+		margin-bottom: 10px;
+	}
+
+	#verify{
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		background: beige;
+		transform: translate(-50%, -50%);
+		max-width: inherit;
+		padding: 10px;
+		box-shadow: rgb(100 100 111 / 20%) 0px 7px 29px 0px;
+	}
+
+	#verify pre{
+		white-space: pre-wrap;
+    	word-break: break-word;
+	}
+
+	#verify #verify-close{
+		position: absolute;
+		right: 15px;
+		cursor: pointer;
+	}
+
+	@media (max-width: 640px) {
+		main{
 			max-width: none;
+		}
+		#verify{
+			width: 90%;
 		}
 	}
 </style>
